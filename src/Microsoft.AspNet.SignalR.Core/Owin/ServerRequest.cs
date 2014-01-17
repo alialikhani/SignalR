@@ -15,6 +15,7 @@ namespace Microsoft.AspNet.SignalR.Owin
         private INameValueCollection _queryString;
         private INameValueCollection _headers;
         private IDictionary<string, Cookie> _cookies;
+        private IPrincipal _user;
 
         private readonly OwinRequest _request;
 
@@ -85,7 +86,16 @@ namespace Microsoft.AspNet.SignalR.Owin
 
         public IPrincipal User
         {
-            get { return _request.User; }
+            get
+            {
+                if (_request.User != null)
+                {
+                    // Cache User because AspNetWebSocket.CloseOutputAsync clears it. We need it during Hub.OnDisconnected
+                    _user = _request.User;
+                }
+
+                return _user;
+            }
         }
 
         public IDictionary<string, object> Environment

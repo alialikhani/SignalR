@@ -358,6 +358,65 @@ namespace Microsoft.AspNet.SignalR.Tests
             }
         }
 
+        [Fact]
+        public async Task SendToUserConnectDisconnectEvents()
+        {
+            using (var host = CreateHost(HostType.IISExpress))
+            {
+                host.Initialize();
+
+                var connection1 = CreateAuthHubConnection(host, "user1", "password");
+                var connection2 = CreateAuthHubConnection(host, "user2", "password");
+                var connection3 = CreateAuthHubConnection(host, "user3", "password");
+                var connection4 = CreateAuthHubConnection(host, "user4", "password");
+
+                int connected = 0;
+                int disconnected = 0;
+                var wh1 = new AsyncManualResetEvent();
+                var wh2 = new AsyncManualResetEvent();
+
+                var hub1 = connection1.CreateHubProxy("AuthenticatedEchoHub");
+                var hub2 = connection2.CreateHubProxy("AuthenticatedEchoHub");
+                var hub3 = connection3.CreateHubProxy("AuthenticatedEchoHub");
+                var hub4 = connection4.CreateHubProxy("AuthenticatedEchoHub");
+                hub1.On<string>("SendUserOnConnected", (user) => 
+                {
+                    if (++connected >= 3)
+                    {
+                        wh1.Set();
+                    }
+                });
+                hub1.On<string>("SendUserOnDisconnected", (user) =>
+                {
+                    if (++disconnected >= 3)
+                    {
+                        wh2.Set();
+                    }
+                });
+
+                using (connection1)
+                {
+                    using (connection2)
+                    {
+                        using (connection3)
+                        {
+                            using (connection4)
+                            {
+                                await connection1.Start();
+                                await connection2.Start(new Microsoft.AspNet.SignalR.Client.Transports.WebSocketTransport());
+                                await connection3.Start(new Microsoft.AspNet.SignalR.Client.Transports.ServerSentEventsTransport());
+                                await connection4.Start(new Microsoft.AspNet.SignalR.Client.Transports.LongPollingTransport());
+
+                                Assert.True(await wh1.WaitAsync(TimeSpan.FromSeconds(5)));
+                            }
+                        }
+                    }
+
+                    Assert.True(await wh2.WaitAsync(TimeSpan.FromSeconds(5)));
+                }
+            }
+        }
+
         [Theory]
         [InlineData(HostType.IISExpress, TransportType.ServerSentEvents)]
         [InlineData(HostType.IISExpress, TransportType.LongPolling)]
